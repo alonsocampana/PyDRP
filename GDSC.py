@@ -16,6 +16,12 @@ class GDSCPreprocessingPipeline(PreprocessingPipeline):
         cell_lines: Data to represent the cell lines. Only expression is implemented.
         gene_subset: A numpy array containing the name of the genes to represent the cell-lines. If None, use all of them.
         """
+        if not os.path.exists(root + "data"):
+            os.mkdir(root + "data")
+        if not os.path.exists(root + "data/raw"):
+            os.mkdir(root + "data/raw")
+        if not os.path.exists(root + "data/processed"):
+            os.mkdir(root + "data/processed")
         self.target = target
         self.gene_subset = gene_subset
         self.filter_missing_ids = filter_missing_ids
