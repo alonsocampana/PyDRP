@@ -52,7 +52,7 @@ class DrugFeaturizer():
         pass
     def __call__(self, smiles_list, drugs):
         """
-        Takes A list of smiles and returns a dictionary with the chosen representation. Needs to be overriden.
+        Takes A list of smiles and returns a dictionary or DataFrame with the chosen representation. Needs to be overriden.
         """
         raise NotImplementedError
     def __str__(self):
@@ -60,6 +60,38 @@ class DrugFeaturizer():
         returns a description of the featurization
         """
         raise NotImplementedError
+
+class IdentityDrugFeaturizer(DrugFeaturizer):
+    def __init__(self):
+        pass
+    def __call__(self, smiles_list, drugs):
+        drug_dict = {drugs[i]:smiles_list[i] for i in range(len(drugs))}
+        return drug_dict
+    def __str__(self):
+        return "PlainSmiles"
+
+class LineFeaturizer():
+    def __init__(self):
+        pass
+    def __call__(self, line_features, line_ids):
+        """
+        Takes A list of Cell-lines and returns a dictionary or DataFrame with the chosen representation. Needs to be overriden.
+        """
+        raise NotImplementedError
+    def __str__(self):
+        """
+        returns a description of the featurization
+        """
+        raise NotImplementedError
+
+class IdentityLineFeaturizer(LineFeaturizer):
+    def __init__(self):
+        pass
+    def __call__(self, line_features, line_ids):
+        line_dict = {line_ids[i]:line_features[i] for i in range(len(line_ids))}
+        return line_dict
+    def __str__(self):
+        return "IdentityLines"
 
 class Splitter():
     def __init__(self,
@@ -123,12 +155,14 @@ class DatasetManager():
                  processing_pipeline,
                  target_processor,
                  drug_featurizer,
+                 line_featurizer,
                  k=25,
                  partition_column = None,
                  exclude_from_test = [],
                  ):
         self.ppl = processing_pipeline
         self.drug_featurizer = drug_featurizer
+        self.line_featurizer = line_featurizer
         self.processed_data = self.ppl.preprocess()
         self.splitter = Splitter(self.processed_data, k, partition_column, exclude_from_test)
         self.splitter.fit()
@@ -140,7 +174,9 @@ class DatasetManager():
         self.target_processor.fit(train)
         return self.target_processor.transform(train), self.target_processor.transform(test), self.target_processor.transform(val)
     def get_cell_lines(self):
-        return self.ppl.get_cell_lines()
+        cell_lines = self.ppl.get_cell_lines()
+        return self.line_featurizer(cell_lines.to_numpy(),
+                                    cell_lines.index.to_numpy())
     def get_drugs(self):
         smiles =  self.ppl.get_drugs()
         path_cache = f"data/processed/{str(self.ppl)}_{str(self.drug_featurizer)}.pt"
