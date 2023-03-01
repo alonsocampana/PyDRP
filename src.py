@@ -152,6 +152,7 @@ class DatasetManager():
         featurized_drugs = set(list(drug_dict.keys()))
         input_drugs = set(list(smiles.index.to_numpy()))
         diff_drugs = featurized_drugs.difference(input_drugs)
+        self.missing_drugs = diff_drugs
         if len(diff_drugs) > 0:
             warnings.warn(f"it was not possible to featurize {diff_drugs}", RuntimeWarning)
         return drug_dict
@@ -183,3 +184,12 @@ class MinMaxScaling(TargetPipeline):
     def __call__(self, x):
         Y_t = self.minmax.transform(x["Y"].to_numpy()[:, None]).squeeze()
         return x.assign(Y = Y_t)
+
+class IdentityPipeline(TargetPipeline):
+    """ Does nothing"""
+    def __init__(self):
+        super(IdentityPipeline).__init__()
+    def fit(self, x):
+        self.fitted=True
+    def __call__(self, x):
+        return x.copy()
