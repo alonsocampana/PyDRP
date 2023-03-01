@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+import os
+import torch
+import warnings
 
 class PreprocessingPipeline():
     def __init__(self,
@@ -11,6 +14,16 @@ class PreprocessingPipeline():
     def preprocess(self):
         """
         Takes the data, returns a DataFrame with columns CELL_ID, DRUG_ID, and Y and saves to `root/processed/`. Needs to be overriden.
+        """
+        raise NotImplementedError
+    def get_cell_lines(self):
+        """
+        Returns the features for the cell-lines indexed by the identifier from CELL_ID. Needs to be overriden.
+        """
+        raise NotImplementedError
+    def get_drugs(self):
+        """
+        Returns the SMILES for the drugs indexed by the identifier from DRUG_ID. Needs to be overriden.
         """
         raise NotImplementedError
 
@@ -33,7 +46,21 @@ class TargetPipeline():
         """
         assert self.fitted, "You are trying to transform data using a non-fitted processor"
         return self(x)
-    
+
+class DrugFeaturizer():
+    def __init__(self):
+        pass
+    def __call__(self, smiles_list, drugs):
+        """
+        Takes A list of smiles and returns a dictionary with the chosen representation. Needs to be overriden.
+        """
+        raise NotImplementedError
+    def __str__(self):
+        """
+        returns a description of the featurization
+        """
+        raise NotImplementedError
+
 class Splitter():
     def __init__(self,
                  data,
@@ -94,17 +121,16 @@ class Splitter():
 class DatasetManager():
     def __init__(self,
                  processing_pipeline,
-                 splitter,
                  target_processor,
+                 drug_featurizer,
                  k=25,
                  partition_column = None,
                  exclude_from_test = [],
                  ):
-        self.root = root
-        self.data = data
         self.ppl = processing_pipeline
+        self.drug_featurizer = drug_featurizer
         self.processed_data = self.ppl.preprocess()
-        self.splitter = splitter(self.processed_data, k, partition_column, exclude_from_test)
+        self.splitter = Splitter(self.processed_data, k, partition_column, exclude_from_test)
         self.splitter.fit()
         self.target_processor = target_processor
     def get_data(self):
@@ -113,17 +139,47 @@ class DatasetManager():
         train, val, test = self.splitter[idx]
         self.target_processor.fit(train)
         return self.target_processor.transform(train), self.target_processor.transform(test), self.target_processor.transform(val)
+    def get_cell_lines(self):
+        return self.ppl.get_cell_lines()
+    def get_drugs(self):
+        smiles =  self.ppl.get_drugs()
+        path_cache = f"data/processed/{str(self.ppl)}_{str(self.drug_featurizer)}.pt"
+        if os.path.exists(path_cache):
+            drug_dict = torch.load(path_cache)
+        else:
+            drug_dict = self.drug_featurizer(list(smiles.iloc[:, 0].to_numpy()), smiles.index.to_numpy())
+            torch.save(drug_dict, path_cache)
+        featurized_drugs = set(list(drug_dict.keys()))
+        input_drugs = set(list(smiles.index.to_numpy()))
+        diff_drugs = featurized_drugs.difference(input_drugs)
+        if len(diff_drugs) > 0:
+            warnings.warn(f"it was not possible to featurize {diff_drugs}", RuntimeWarning)
+        return drug_dict
 
 class LogMinMaxScaling(TargetPipeline):
     """ Applies log transformation and MinMaxScaling to the target"""
     def __init__(self,
-                 offset = 1):
+                 offset = 1,
+                 target_range = (-1, 1)):
         super(LogMinMaxScaling).__init__()
         self.offset = offset
-        self.minmax = MinMaxScaler()
+        self.minmax = MinMaxScaler(target_range)
     def fit(self, x):
-        self.minmax.fit(X = np.log(x["Y"][:, None] + self.offset))
+        self.minmax.fit(X = np.log(x["Y"].to_numpy()[:, None] + self.offset))
         self.fitted=True
     def __call__(self, x):
-        Y_t = self.minmax.transform(np.log(x["Y"][:, None] + self.offset)).squeeze()
+        Y_t = self.minmax.transform(np.log(x["Y"].to_numpy()[:, None] + self.offset)).squeeze()
+        return x.assign(Y = Y_t)
+
+class MinMaxScaling(TargetPipeline):
+    """ Applies MinMaxScaling to the target"""
+    def __init__(self,
+                 target_range = (-1, 1)):
+        super(LogMinMaxScaling).__init__()
+        self.minmax = MinMaxScaler(target_range)
+    def fit(self, x):
+        self.minmax.fit(X = x["Y"].to_numpy()[:, None])
+        self.fitted=True
+    def __call__(self, x):
+        Y_t = self.minmax.transform(x["Y"].to_numpy()[:, None]).squeeze()
         return x.assign(Y = Y_t)
