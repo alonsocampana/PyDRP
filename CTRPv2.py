@@ -25,6 +25,7 @@ class CTRPv2PreprocessingPipeline(PreprocessingPipeline):
         if not os.path.exists(root + "data/processed"):
             os.mkdir(root + "data/processed")
         self.target = target
+        self.root = root
         if target == "ec50":
             self.trgt_col = "apparent_ec50_umol"
         elif target == "auc":
@@ -43,12 +44,7 @@ class CTRPv2PreprocessingPipeline(PreprocessingPipeline):
             self.z = ZipFile(BytesIO(response.content))
         self.data = pd.read_csv(self.z.open("v20.data.curves_post_qc.txt"), sep = "\t")
         if cell_lines == "expression":
-            if os.path.exists(root + "data/processed/CCLE_expression.csv"):
-                self.cell_lines = pd.read_csv(root + "data/processed/CCLE_expression.csv", index_col=0)
-            else:
-                self.cell_lines = pd.read_csv("https://ndownloader.figshare.com/files/26261476", index_col=0)
-                self.cell_lines.to_csv("data/processed/CCLE_expression.csv")
-            self.cell_lines.columns = self.cell_lines.columns.str.extract("(^[a-zA-Z0-9-\.]+) \(")
+            self.get_ccle_expression()
         df2 = pd.read_csv(self.z.open("v20.meta.per_compound.txt"), sep = "\t")
         self.drug_smiles = df2.loc[:, ["master_cpd_id", "cpd_smiles"]]
         self.drug_smiles.columns = ["DRUG_ID", "SMILES"]
@@ -71,10 +67,11 @@ class CTRPv2PreprocessingPipeline(PreprocessingPipeline):
         if self.gene_subset is None:
             return self.cell_lines.loc[data_lines]
         else:
-            return self.cell_lines.loc[data_lines, self.gene_subset]
+            self.cell_lines = self.cell_lines.loc[:, self.cell_lines.columns.isin(self.gene_subset)]
+            return self.cell_lines.loc[data_lines]
     def get_drugs(self):
         data_drugs = self.data_subset.loc[:, "DRUG_ID"].unique()
         return self.drug_smiles.loc[data_drugs]
     
     def __str__(self):
-        return "CTRPv2"
+        return "CTRPv2" + self.target

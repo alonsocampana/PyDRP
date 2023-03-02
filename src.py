@@ -26,6 +26,13 @@ class PreprocessingPipeline():
         Returns the SMILES for the drugs indexed by the identifier from DRUG_ID. Needs to be overriden.
         """
         raise NotImplementedError
+    def get_ccle_expression(self):
+        if os.path.exists(self.root + "data/processed/CCLE_expression.csv"):
+            self.cell_lines = pd.read_csv(self.root + "data/processed/CCLE_expression.csv", index_col=0)
+        else:
+            self.cell_lines = pd.read_csv(self.root + "https://ndownloader.figshare.com/files/26261476", index_col=0)
+            self.cell_lines.to_csv("data/processed/CCLE_expression.csv")
+        self.cell_lines.columns = self.cell_lines.columns.str.extract("(^[a-zA-Z0-9-\.]+) \(").to_numpy().squeeze()
 
 class TargetPipeline():
     def __init__(self):
@@ -61,14 +68,7 @@ class DrugFeaturizer():
         """
         raise NotImplementedError
 
-class IdentityDrugFeaturizer(DrugFeaturizer):
-    def __init__(self):
-        pass
-    def __call__(self, smiles_list, drugs):
-        drug_dict = {drugs[i]:smiles_list[i] for i in range(len(drugs))}
-        return drug_dict
-    def __str__(self):
-        return "PlainSmiles"
+
 
 class LineFeaturizer():
     def __init__(self):
@@ -84,6 +84,15 @@ class LineFeaturizer():
         """
         raise NotImplementedError
 
+class IdentityDrugFeaturizer(DrugFeaturizer):
+    def __init__(self):
+        pass
+    def __call__(self, smiles_list, drugs):
+        drug_dict = {drugs[i]:smiles_list[i] for i in range(len(drugs))}
+        return drug_dict
+    def __str__(self):
+        return "PlainSmiles"        
+
 class IdentityLineFeaturizer(LineFeaturizer):
     def __init__(self):
         pass
@@ -92,6 +101,15 @@ class IdentityLineFeaturizer(LineFeaturizer):
         return line_dict
     def __str__(self):
         return "IdentityLines"
+
+class TensorLineFeaturizer(LineFeaturizer):
+    def __init__(self):
+        pass
+    def __call__(self, line_features, line_ids):
+        line_dict = {line_ids[i]:torch.Tensor(line_features[i]) for i in range(len(line_ids))}
+        return line_dict
+    def __str__(self):
+        return "TensorLines"
 
 class Splitter():
     def __init__(self,

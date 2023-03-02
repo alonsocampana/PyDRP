@@ -91,13 +91,13 @@ class NI60PreprocessingPipeline(PreprocessingPipeline):
             self.drugs = self.drug_smiles.index.to_numpy()
             self.data_subset = self.data_subset.query("CELL_ID in @self.lines & DRUG_ID in @self.drugs")
         return self.data_subset.dropna().drop_duplicates()
-    
     def get_cell_lines(self):
         data_lines = self.data_subset.loc[:, "CELL_ID"].unique()
         if self.gene_subset is None:
             return self.cell_lines.loc[data_lines]
         else:
-            return self.cell_lines.loc[data_lines, self.gene_subset]
+            self.cell_lines = self.cell_lines.loc[:, self.cell_lines.columns.isin(self.gene_subset)]
+            return self.cell_lines.loc[data_lines]
     def get_drugs(self):
         data_drugs = self.data_subset.loc[:, "DRUG_ID"].unique()
         return self.drug_smiles.loc[data_drugs]

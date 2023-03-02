@@ -63,7 +63,8 @@ class GDSCPreprocessingPipeline(PreprocessingPipeline):
         if self.gene_subset is None:
             return self.cell_lines.loc[data_lines]
         else:
-            return self.cell_lines.loc[data_lines, self.gene_subset]
+            self.cell_lines = self.cell_lines.loc[:, self.cell_lines.columns.isin(self.gene_subset)]
+            return self.cell_lines.loc[data_lines]
     def get_drugs(self):
         data_drugs = self.data_subset.loc[:, "DRUG_ID"].unique()
         return self.drug_smiles.loc[data_drugs]
