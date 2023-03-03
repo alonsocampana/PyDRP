@@ -1,13 +1,30 @@
 from src import DrugFeaturizer
 import numpy as np
+import rdkit
 from rdkit.Chem import AllChem
 
-class ECFPFeaturizer(DrugFeaturizer):
-    def __init__(self, R=2, L= 2**10, use_features=False, use_chirality = False, transform = None):
+class FingerprintFeaturizer(DrugFeaturizer):
+    def __init__(self,
+                 fingerprint = "morgan",
+                 R=2, 
+                 fp_kwargs = {},
+                 transform = None):
+        """
+        Get a fingerprint from a list of molecules.
+        Available fingerprints: MACCS, morgan, topological_torsion
+        R is only used for morgan fingerprint.
+        fp_kwards passes the arguments to the rdkit fingerprint functions:
+        GetMorganFingerprintAsBitVect, GetMACCSKeysFingerprint, GetTopologicalTorsionFingerprint
+        """
         self.R = R
-        self.L = L
-        self.use_features = use_features
-        self.use_chirality = use_chirality
+        self.fp_kwargs = fp_kwargs
+        self.fingerprint = fingerprint
+        if fingerprint == "morgan":
+            self.f = lambda x: rdkit.Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(x, self.R, **fp_kwargs)
+        elif fingerprint == "MACCS":
+            self.f = lambda x: rdkit.Chem.rdMolDescriptors.GetMACCSKeysFingerprint(x, **fp_kwargs)
+        elif fingerprint == "topological_torsion":
+            self.f = lambda x: rdkit.Chem.rdMolDescriptors.GetTopologicalTorsionFingerprint(x, **fp_kwargs)
         self.transform = transform
     def __call__(self, smiles_list, drugs = None):
         drug_dict = {}
@@ -16,11 +33,7 @@ class ECFPFeaturizer(DrugFeaturizer):
         for i in range(len(smiles_list)):
             smiles = smiles_list[i]
             molecule = AllChem.MolFromSmiles(smiles)
-            feature_list = AllChem.GetMorganFingerprintAsBitVect(molecule,
-                                                            radius = self.R,
-                                                            nBits = self.L,
-                                                            useFeatures = self.use_features,
-                                                            useChirality = self.use_chirality)
+            feature_list = self.f(molecule)
             f = np.array(feature_list)
             if self.transform is not None:
                 f = self.transform(f)
@@ -30,5 +43,4 @@ class ECFPFeaturizer(DrugFeaturizer):
         """
         returns a description of the featurization
         """
-        return "ECFinterprint"
-        
+        return f"{self.fingerprint}Fingerprint_R{self.R}_{str(self.fp_kwargs)}"
