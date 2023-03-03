@@ -1,63 +1,26 @@
 import pandas as pd
 import numpy as np
-import pandas as pd
-import rdkit
 import base64
-import numpy as np
-from rdkit import Chem
-from rdkit.Chem import AllChem
-from rdkit.Chem import rdDistGeom as molDG
-from tqdm.contrib.concurrent import process_map
 import multiprocessing as mp
-import os
-from torch_geometric.datasets import MoleculeNet, TUDataset
-import rdkit
-from rdkit import Chem
+import re
+# Pytorch and Pytorch Geometric
+from torch_geometric.data import Data, Batch
+import torch_geometric
 import torch
 from torch import nn
 from torch.nn import functional as F
-import pandas as pd
-import numpy as np
-import re
-from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
-import os 
-import json
-import uuid
+from torch_geometric import transforms as T
+from torch_geometric.utils import coalesce
+# RDkit
+import rdkit
 from rdkit.Chem.rdmolops import GetAdjacencyMatrix
 from rdkit.Chem import Descriptors
 from rdkit.ML.Descriptors import MoleculeDescriptors
-# Pytorch and Pytorch Geometric
-import torch
-from torch_geometric.data import Data, Batch
-import torch_geometric
-import pickle
-import sys
-from sklearn import metrics
-from sklearn.preprocessing import MinMaxScaler
-from scipy.stats import pearsonr, spearmanr
-import seaborn as sns
-from matplotlib import pyplot as plt
-import gc
-import time
-from rdkit.Chem import rdMolDescriptors
 from rdkit import Chem
-from io import StringIO
-from tdc.single_pred import ADME, Tox, HTS
-from tdc.base_dataset import DataLoader as TDC_data
-import tdc 
-from torch import nn
-from tdc.single_pred import single_pred_dataset
-import torch_geometric
-import torch
-from torch import nn
-from torch_geometric import transforms as T
-from torch_geometric.utils import coalesce
-from torch_scatter import scatter_add
-import pandas as pd
-from sklearn.model_selection import KFold
-from torch.nn import functional as F
+from rdkit.Chem import AllChem
+from rdkit.Chem import rdDistGeom as molDG
+from rdkit.Chem import rdMolDescriptors
+
 from src import DrugFeaturizer
 
 
