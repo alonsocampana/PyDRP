@@ -195,7 +195,7 @@ class GraphCreator(DrugFeaturizer):
                 if add_linegraph:
                     data_dict[drug] = self.bl(data_dict[drug])
             except Exception as e:
-                print(e)
+                warnings.warn( f"{smiles_list[x]} could not be transformed into a graph", RuntimeWarning,)
         return data_dict
     def __str__(self):
         suffix = "graphs"

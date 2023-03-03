@@ -2,6 +2,9 @@ import pandas as pd
 from src import PreprocessingPipeline
 import os
 import numpy as np
+import requests
+from io import BytesIO
+import zipfile
 
 class GDSCPreprocessingPipeline(PreprocessingPipeline):
     def __init__(self, root = "./",
@@ -39,16 +42,59 @@ class GDSCPreprocessingPipeline(PreprocessingPipeline):
                 self.data.to_csv(root + "data/raw/gdsc2.csv")
             else:
                 self.data = pd.read_csv(root + "data/raw/gdsc2.csv", index_col = 0)
-        if cell_lines == "expression":
+        df_features = []
+        if "expression" in cell_lines:
             if os.path.exists(root + "data/processed/gdsc_expression.csv"):
-                self.cell_lines = pd.read_csv(root + "data/processed/gdsc_expression.csv", index_col = 0)
+                expression = pd.read_csv(root + "data/processed/gdsc_expression.csv", index_col = 0).reset_index().astype({"index":int}).set_index("index")
             else:
                 data = pd.read_csv("https://www.cancerrxgene.org/gdsc1000/GDSC1000_WebResources//Data/preprocessed/Cell_line_RMA_proc_basalExp.txt.zip", compression = "zip", sep = "\t")
                 data = data.set_index("GENE_SYMBOLS").iloc[:, 1:].T
                 data.index = data.index.str.extract("DATA.([0-9]+)").to_numpy().squeeze()
-                self.cell_lines = data.reset_index(drop=False).groupby("index").first()
-                self.cell_lines.to_csv(root + "data/processed/gdsc_expression.csv")
-        self.drug_smiles = pd.read_csv(root +  "data/processed/GDSC_smiles.csv", index_col=0)
+                expression = data.reset_index(drop=False).groupby("index").first()
+                expression.to_csv(root + "data/processed/gdsc_expression.csv")
+            if self.gene_subset is not None:
+                expression = expression.loc[:, expression.columns.isin(self.gene_subset)]
+            df_features += [expression]
+        if "mutations" in cell_lines:
+            if not os.path.exists(root + "data/processed/gdsc_mutations.csv"):
+                r = requests.get("https://www.cancerrxgene.org/gdsc1000/GDSC1000_WebResources//Data/BEMs/CellLines/CellLines_CG_BEMs.zip")
+                zf = zipfile.ZipFile(BytesIO(r.content))
+                mutations = pd.read_csv(zf.open("CellLines_CG_BEMs/PANCAN_SEQ_BEM.txt"), sep = "\t", index_col = 0).T.reset_index().astype({"index":int}).set_index("index")
+                mutations.to_csv(root + "data/processed/gdsc_mutations.csv")
+            else:
+                mutations = pd.read_csv(root + "data/processed/gdsc_mutations.csv", index_col=0).reset_index().astype({"index":int}).set_index("index")
+            df_features += [mutations]
+        if "cnv" in cell_lines:
+            if not os.path.exists(root + "data/processed/gdsc_cnvs.csv"):
+                r = requests.get("https://www.cancerrxgene.org/gdsc1000/GDSC1000_WebResources//Data/BEMs/CellLines/CellLines_CNV_BEMs.zip")
+                zf = zipfile.ZipFile(BytesIO(r.content))
+                cnv = pd.read_csv(zf.open("CellLine_CNV_BEMs/PANCAN_CNA_BEM.rdata.txt"), sep = "\t", index_col = 0).reset_index().astype({"index":int}).set_index("index")
+                cnv.to_csv(root + "data/processed/gdsc_cnvs.csv")
+            else:
+                cnv = pd.read_csv(root + "data/processed/gdsc_cnvs.csv", index_col=0).reset_index().astype({"index":int}).set_index("index")
+            df_features += [cnv]
+        if "methylation" in cell_lines:
+            if not os.path.exists(root + "data/processed/gdsc_methylation.csv"):
+                r = requests.get("https://www.cancerrxgene.org/gdsc1000/GDSC1000_WebResources//Data/BEMs/CellLines/CellLines_METH_BEMs.zip")
+                zf = zipfile.ZipFile(BytesIO(r.content))
+                methylation = pd.read_csv(zf.open("METH_CELLLINES_BEMs/PANCAN.txt"), sep = "\t", index_col = 0).T.reset_index().astype({"index":int}).set_index("index")
+                methylation.to_csv(root + "data/processed/gdsc_methylation.csv")
+            else:
+                methylation = pd.read_csv(root + "data/processed/gdsc_methylation.csv", index_col=0).reset_index().astype({"index":int}).set_index("index")
+            df_features += [methylation]
+        if "CFE":
+            if not os.path.exists(root + "data/processed/gdsc_fce.csv"):
+                r = requests.get("https://www.cancerrxgene.org/gdsc1000/GDSC1000_WebResources//Data/BEMs/CellLines/CellLines_Mo_BEMs.zip")
+                zf = zipfile.ZipFile(BytesIO(r.content))
+                fce = pd.read_csv(zf.open("CellLines_Mo_BEMs/PANCAN_simple_MOBEM.rdata.tsv"), sep = "\t", index_col = 0).T.reset_index().astype({"index":int}).set_index("index")
+                fce.to_csv(root + "data/processed/gdsc_fce.csv")
+            else:
+                fce = pd.read_csv(root + "data/processed/gdsc_fce.csv").reset_index().astype({"index":int}).set_index("index")
+            df_features += [fce]
+        self.df_features = df_features
+        self.cell_lines = pd.concat(df_features, axis=0).reset_index().groupby("index").max().dropna()
+        assert not self.cell_lines.empty, "The resulting cell line features contain no cell-lines. Maybe no valid features were selected"
+        self.drug_smiles = pd.read_csv(root + "data/processed/GDSC_smiles.csv", index_col=0)
     def preprocess(self):
         self.data_subset = self.data.loc[:, ["COSMIC_ID", "DRUG_NAME", self.target]].groupby(["COSMIC_ID", "DRUG_NAME"]).mean().reset_index()
         self.data_subset.columns = ["CELL_ID", "DRUG_ID", "Y"]
@@ -60,11 +106,7 @@ class GDSCPreprocessingPipeline(PreprocessingPipeline):
     
     def get_cell_lines(self):
         data_lines = self.data_subset.loc[:, "CELL_ID"].unique()
-        if self.gene_subset is None:
-            return self.cell_lines.loc[data_lines]
-        else:
-            self.cell_lines = self.cell_lines.loc[:, self.cell_lines.columns.isin(self.gene_subset)]
-            return self.cell_lines.loc[data_lines]
+        return self.cell_lines.loc[data_lines]
     def get_drugs(self):
         data_drugs = self.data_subset.loc[:, "DRUG_ID"].unique()
         return self.drug_smiles.loc[data_drugs]
