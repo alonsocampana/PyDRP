@@ -105,6 +105,9 @@ class ToxRicPreprocessingPipeline(PreprocessingPipeline):
         return "ToxRic_" + str(self.minimum_experiments)
 
 class TDCSingleInstanceWrapper(PreprocessingPipeline):
+    """
+    Wrapper around tdc.single_pred datasets (https://tdcommons.ai/single_pred_tasks/overview/)
+    """
     def __init__(self,
                  TDCsingleInstance,
                  filter_missing_ids = True,
@@ -132,7 +135,7 @@ class TDCSingleInstanceWrapper(PreprocessingPipeline):
             label_name = ""
         return f"{name}_{label_name}"
 
-class MultiTaskPreprocessingPipeline():
+class MultiTaskPreprocessingPipeline(PreprocessingPipeline):
     def __init__(self, preprocessing_pipelines):
         """
         Creates Multitask datasets from a series of preprocessing pipelines.
@@ -181,3 +184,24 @@ class MultiTaskPreprocessingPipeline():
     def __str__(self):
         strs = [str(ppl) for ppl in self.preprocessing_pipelines]
         return "&".join(strs)
+
+class MakeDrugwise(PreprocessingPipeline):
+    def __init__(self, ppl):
+        """
+        Takes a pairwise ppl and converts it to multitask prediction ppl
+        """
+        self.ppl = ppl
+        self.ppl.preprocess()
+    def preprocess(self):
+        df = self.ppl.preprocess()
+        dwise_df = df.set_index(["DRUG_ID", "CELL_ID"]).unstack()
+        Y = dwise_df.to_numpy()
+        self.data_subset = dwise_df.drop(dwise_df.columns, axis=1).assign(Y = Y.tolist())
+        self.data_subset = self.data_subset.droplevel(0, axis=1)
+        self.data_subset.columns = ["Y"]
+        self.data_subset =  self.data_subset.reset_index()
+        return self.data_subset
+    def get_drugs(self):
+        return self.ppl.get_drugs()
+    def __str__(self):
+        return str(self.ppl) + "_drugwise"
