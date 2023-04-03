@@ -1,1 +1,0 @@
-from PyDRP.Models.encoders.encoders import GATmannEncoder
