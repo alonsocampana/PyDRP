@@ -94,7 +94,9 @@ class ToxRicPreprocessingPipeline(PreprocessingPipeline):
         tox_df = tox_df.reset_index().loc[:, ["TAID"]].assign(y = tox_df.to_numpy().tolist())
         tox_df.columns = ["DRUG_ID", "Y"]
         self.data_subset = tox_df
-        self.drug_smiles = drug_df
+        self.drug_smiles = drug_df.reset_index()
+        self.drug_smiles.columns = ["DRUG_ID", "SMILES"]
+        self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
         isin_data = self.data_subset.loc[:, "DRUG_ID"].isin(self.drug_smiles.index.to_numpy())
         self.data_subset = self.data_subset.loc[isin_data]
         return self.data_subset
@@ -202,6 +204,7 @@ class MakeDrugwise(PreprocessingPipeline):
         self.data_subset =  self.data_subset.reset_index()
         return self.data_subset
     def get_drugs(self):
-        return self.ppl.get_drugs()
+        self.drug_smiles = self.ppl.get_drugs()
+        return self.drug_smiles
     def __str__(self):
         return str(self.ppl) + "_drugwise"
