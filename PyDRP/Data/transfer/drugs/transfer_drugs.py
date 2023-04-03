@@ -9,6 +9,8 @@ from PyDRP.src import Splitter
 from PyDRP.Data.features.targets import IdentityPipeline
 from PyDRP.Data.features.drugs import GraphCreator
 import torch
+import rdkit
+from rdkit import rdBase
 
 class TransferDrugsDatasetManager():
     def __init__(self,
@@ -22,7 +24,7 @@ class TransferDrugsDatasetManager():
         self.drug_featurizer = drug_featurizer
         self.processed_data = self.ppl.preprocess()
         self.splitter = Splitter(self.processed_data, k, "DRUG_ID", exclude_from_test)
-        self.splitter.fit(None)
+        self.splitter.fit()
         self.target_processor = target_processor
     def get_data(self):
         return self.processed_data
@@ -101,3 +103,81 @@ class ToxRicPreprocessingPipeline(PreprocessingPipeline):
         return self.drug_smiles.loc[data_drugs]
     def __str__(self):
         return "ToxRic_" + str(self.minimum_experiments)
+
+class TDCSingleInstanceWrapper(PreprocessingPipeline):
+    def __init__(self,
+                 TDCsingleInstance,
+                 filter_missing_ids = True,
+                ):
+        self.tdc = TDCsingleInstance
+        self.filter_missing_ids = filter_missing_ids
+        self.data = self.tdc.get_data()
+        self.data.columns = ["DRUG_ID", "SMILES", "Y"]
+        self.drug_smiles = self.data.loc[:, ["DRUG_ID", "SMILES"]]
+        self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
+    def preprocess(self):
+        self.data_subset = self.data.loc[:, ["DRUG_ID", "Y"]]
+        if self.filter_missing_ids:
+            self.drugs = self.drug_smiles.index.to_numpy()
+            self.data_subset = self.data_subset.query("DRUG_ID in @self.drugs")
+        return self.data_subset
+    def get_drugs(self):
+        data_drugs = self.data_subset.loc[:, "DRUG_ID"].unique()
+        return self.drug_smiles.loc[data_drugs]
+    def __str__(self):
+        name = str(self.tdc.name)
+        try:
+            label_name = str(self.tdc.label_name)
+        except:
+            label_name = ""
+        return f"{name}_{label_name}"
+
+class MultiTaskPreprocessingPipeline():
+    def __init__(self, preprocessing_pipelines):
+        """
+        Creates Multitask datasets from a series of preprocessing pipelines.
+        preprocessing_pipelines: A list of preprocessing pipelines
+        
+        """
+        self.preprocessing_pipelines = preprocessing_pipelines
+    def get_cannonical_smiles(self, smiles, error_on_bad_smiles = False):
+        if error_on_bad_smiles:
+            return rdkit.Chem.CanonSmiles(smiles)
+        try:
+            return rdkit.Chem.CanonSmiles(smiles)
+        except:
+            return smiles
+    def preprocess(self):
+        dfs = []
+        blocker = rdBase.BlockLogs()
+        mult_columns = 0
+        for i, ppl in enumerate(self.preprocessing_pipelines):
+            data_task = ppl.preprocess()
+            if type(data_task["Y"].iloc[0]) == list:
+                new_cols = pd.DataFrame(data_task['Y'].to_list())
+                new_cols.columns = [f"Y_{i+j+mult_columns}" for j in range(new_cols.shape[1])]
+                mult_columns += (new_cols.shape[1]-1)
+                data_task = pd.concat([data_task.drop("Y", axis=1), new_cols], axis=1)
+            else:  
+                data_task = data_task.rename(columns = {"Y":f"Y_{i+mult_columns}"})
+            drugs_task = ppl.get_drugs().reset_index()
+            drugs_task["SMILES"] = drugs_task["SMILES"].apply(self.get_cannonical_smiles)
+            task_df = data_task.merge(drugs_task, on = "DRUG_ID").set_index("SMILES")
+            task_df = task_df.groupby("SMILES").first()
+            task_df["DRUG_ID"] = task_df["DRUG_ID"].astype(str) + f"_{i}"
+            dfs += [task_df]
+        merged_df = pd.concat(dfs, axis=1)
+        merged_df = merged_df.reset_index()
+        d_np = merged_df.loc[:, [f"Y_{i}" for i in range(len(self.preprocessing_pipelines) + mult_columns)]].to_numpy()
+        merged_df = merged_df.assign(Y = d_np.tolist()).loc[:, ["SMILES", "Y"]].assign(DRUG_ID = np.arange(d_np.shape[0]))
+        merged_df = merged_df.loc[:, ["DRUG_ID", "SMILES", "Y"]]
+        self.drug_smiles = merged_df.loc[:, ["DRUG_ID", "SMILES"]].set_index("DRUG_ID")
+        self.data_subset = merged_df.loc[:, ["DRUG_ID", "Y"]]
+        return self.data_subset
+    def get_drugs(self):
+        blocker = rdBase.BlockLogs()
+        data_drugs = self.data_subset.loc[:, "DRUG_ID"]
+        return self.drug_smiles.loc[data_drugs]
+    def __str__(self):
+        strs = [str(ppl) for ppl in self.preprocessing_pipelines]
+        return "&".join(strs)

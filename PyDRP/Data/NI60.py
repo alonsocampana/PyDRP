@@ -10,13 +10,13 @@ import unlzw3
 
 class NI60PreprocessingPipeline(PreprocessingPipeline):
     def __init__(self, root = "./",
-                 target = "ec_50",
+                 target = "GI50",
                  cell_lines = "expression",
                  gene_subset = None,
                 filter_missing_ids = True):
         """
         Downloads and preprocesses the data.
-        target: Either GI50, 
+        target: Either GI50, TGI, LC50 or IC50
         cell_lines: Data to represent the cell lines. Only expression is implemented.
         gene_subset: A numpy array containing the name of the genes to represent the cell-lines. If None, use all of them.
         """
@@ -60,6 +60,8 @@ class NI60PreprocessingPipeline(PreprocessingPipeline):
                 z = ZipFile(BytesIO(r.content))
                 self.data = pd.read_csv(z.open("IC50.csv"))
                 self.data.to_csv(root + "data/raw/NIIC50.csv")
+        else:
+            raise NotImplementedError
         self.gene_subset = gene_subset
         self.filter_missing_ids = filter_missing_ids
         self.dataset = "NI60"
