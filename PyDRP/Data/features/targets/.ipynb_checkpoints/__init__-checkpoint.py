@@ -1,1 +1,1 @@
-from PyDRP.src import LogMinMaxScaling, MinMaxScaling, IdentityPipeline, TargetPipeline
+from PyDRP.src import LogMinMaxScaling, MinMaxScaling, MultitargetMinMaxScaling, IdentityPipeline, TargetPipeline

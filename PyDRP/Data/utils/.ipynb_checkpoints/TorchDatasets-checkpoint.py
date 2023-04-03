@@ -25,6 +25,23 @@ class TorchGraphsDataset(Dataset):
         drug_graph["CELL_ID"] = np.array([line])
         return drug_graph
 
+class TorchGraphsTransferDataset(Dataset):
+    def __init__(self, data, drug_dict, filter_missing = True):
+        self.data = data
+        self.drug_dict = drug_dict
+        if filter_missing:
+            drugs = list(self.drug_dict.keys())
+        self.data = self.data.query("DRUG_ID in @drugs")
+    def __len__(self):
+        return len(self.data)
+    def __getitem__(self, idx):
+        entry = self.data.iloc[idx]
+        drug = entry.loc["DRUG_ID"]
+        drug_graph  = self.drug_dict[drug].clone()
+        drug_graph["y"] = torch.Tensor([entry["Y"]])
+        drug_graph["DRUG_ID"] = np.array([drug])
+        return drug_graph
+
 class TorchGraphsDrugwiseDataset(Dataset):
     def __init__(self, data, drug_dict, line_dict, filter_missing = True):
         self.data = data

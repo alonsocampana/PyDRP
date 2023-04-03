@@ -247,11 +247,24 @@ class MinMaxScaling(TargetPipeline):
         Y_t = self.minmax.transform(x["Y"].to_numpy()[:, None]).squeeze()
         return x.assign(Y = Y_t)
 
+class MultitargetMinMaxScaling(TargetPipeline):
+    """ Applies MinMaxScaling to the target"""
+    def __init__(self,
+                 target_range = (-1, 1)):
+        super(MinMaxScaling).__init__()
+        self.minmax = MinMaxScaler(target_range)
+    def fit(self, x):
+        self.minmax.fit(X = np.vstack(x["Y"].to_numpy()))
+        self.fitted=True
+    def __call__(self, x):
+        Y_t = self.minmax.transform(np.vstack(x["Y"].to_numpy()).squeeze())
+        return x.assign(Y = Y_t.tolist())
+
 class IdentityPipeline(TargetPipeline):
     """ Does nothing"""
     def __init__(self):
         super(IdentityPipeline).__init__()
-    def fit(self, x):
+    def fit(self, x=None):
         self.fitted=True
     def __call__(self, x):
         return x.copy()
