@@ -85,3 +85,19 @@ class TorchGraphsCellwiseDataset(Dataset):
         drug_graph["y"] = torch.Tensor(y)
         drug_graph["cell"] = self.line_dict[line]
         return drug_graph
+
+class TorchLinesTransferDataset(Dataset):
+    def __init__(self, data,
+                 line_dict,
+                 filter_missing = True):
+        self.data = data
+        self.line_dict = line_dict
+        if filter_missing:
+            lines = list(self.line_dict.keys())
+        self.data = self.data.query("CELL_ID in @lines")
+        self.input_stack = torch.stack(self.data["CELL_ID"].map(self.line_dict).tolist())
+        self.target_stack = torch.Tensor(self.data["Y"].tolist())
+    def __len__(self):
+        return len(self.data)
+    def __getitem__(self, idx):
+        return self.input_stack[idx], self.target_stack[idx]

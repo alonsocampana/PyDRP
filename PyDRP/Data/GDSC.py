@@ -82,7 +82,7 @@ class GDSCPreprocessingPipeline(PreprocessingPipeline):
             else:
                 methylation = pd.read_csv(root + "data/processed/gdsc_methylation.csv", index_col=0).reset_index().astype({"index":int}).set_index("index")
             df_features += [methylation]
-        if "CFE":
+        if "CFE" in cell_lines:
             if not os.path.exists(root + "data/processed/gdsc_fce.csv"):
                 r = requests.get("https://www.cancerrxgene.org/gdsc1000/GDSC1000_WebResources//Data/BEMs/CellLines/CellLines_Mo_BEMs.zip")
                 zf = zipfile.ZipFile(BytesIO(r.content))
