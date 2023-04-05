@@ -8,3 +8,4 @@ from PyDRP.src import PreprocessingPipeline, DatasetManager
 import PyDRP.Data.features
 import PyDRP.Data.utils
 import PyDRP.Data.transfer
+from PyDRP.Data.DTI import DTIDatasetManager, TDCDTIWrapper

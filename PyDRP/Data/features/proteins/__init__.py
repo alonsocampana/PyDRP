@@ -1,0 +1,1 @@
+from PyDRP.Data.features.proteins.protein_features import BertProteinFeaturizer
