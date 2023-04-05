@@ -101,3 +101,28 @@ class TorchLinesTransferDataset(Dataset):
         return len(self.data)
     def __getitem__(self, idx):
         return self.input_stack[idx], self.target_stack[idx]
+
+class TorchProteinsGraphsDataset(Dataset):
+    def __init__(self, data,
+                 drug_dict,
+                 protein_dict,
+                 filter_missing = True):
+        self.data = data
+        self.drug_dict = drug_dict
+        self.protein_dict = protein_dict
+        if filter_missing:
+            drugs = list(self.drug_dict.keys())
+            proteins = list(self.protein_dict.keys())
+        self.data = self.data.query("DRUG_ID in @drugs & PROTEIN_ID in @proteins")
+    def __len__(self):
+        return len(self.data)
+    def __getitem__(self, idx):
+        entry = self.data.iloc[idx]
+        drug = entry.loc["DRUG_ID"]
+        protein = entry.loc["PROTEIN_ID"]
+        drug_graph  = self.drug_dict[drug].clone()
+        drug_graph["y"] = torch.Tensor([entry["Y"]]).unsqueeze(1)
+        drug_graph["protein"] = self.protein_dict[protein].clone().unsqueeze(0)
+        drug_graph["DRUG_ID"] = np.array([drug])
+        drug_graph["PROTEIN_ID"] = np.array([protein])
+        return drug_graph

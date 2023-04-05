@@ -1,1 +1,1 @@
-from PyDRP.Data.utils.TorchDatasets import TorchGraphsDataset, TorchGraphsTransferDataset, TorchGraphsDrugwiseDataset, TorchGraphsCellwiseDataset, TorchLinesTransferDataset
+from PyDRP.Data.utils.TorchDatasets import TorchGraphsDataset, TorchGraphsTransferDataset, TorchGraphsDrugwiseDataset, TorchGraphsCellwiseDataset, TorchLinesTransferDataset, TorchProteinsGraphsDataset
