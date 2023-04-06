@@ -1,0 +1,1 @@
+from PyDRP.Models.encoders.proteins.protein_encoders import ProteinConvPooling

@@ -79,9 +79,22 @@ class ToxRicPreprocessingPipeline(PreprocessingPipeline):
     def preprocess(self):
         ids = []
         toxs = []
-        for i, df in enumerate(self.dfs):
+        dfs_tr = {}
+        for i in range(len(self.dfs)):
             try:
-                ids+=[df.loc[:, ["TAID", "Canonical SMILES"]].set_index("TAID")]
+                if len(dfs[i]["Toxicity Value"].unique()) > 2:
+                    dfs_tr[i] = [np.log(dfs[i]["Toxicity Value"] + 1)]
+            except:
+                pass
+        log_cols = list(dfs_tr.keys())
+        for i, df in enumerate(self.dfs):
+            if i in log_cols:
+                try:
+                    ids+=[df.loc[:, ["TAID", "Canonical SMILES"]].set_index("TAID")]
+                except:
+                    pass
+            try:
+                df.loc[:, "Toxicity Value"] = np.log(df.loc[:, "Toxicity Value"] + 1)
             except:
                 pass
             try:

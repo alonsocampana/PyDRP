@@ -115,4 +115,77 @@ class ResponseDecoder(nn.Module):
             
     def forward(self, line_embeds, drug_embeds, *args, **kwargs):
         raise NotImplementedError
- 
+
+
+class GNNProteinDrugEncoderDecoder(PairsNetwork):
+    def __init__(self,
+                 protein_encoder,
+                 drug_encoder,
+                 protein_adapter,
+                 drug_adapter,
+                 decoder,
+                 **kwargs):
+        """
+        Network consisting of two encoders, two adapters and a decoder.
+        """
+        super().__init__()
+        self.protein_encoder = protein_encoder
+        self.drug_encoder = drug_encoder
+        self.protein_adapter = protein_adapter
+        self.drug_adapter = drug_adapter
+        self.decoder = decoder
+    def forward(self, data, *args, **kwargs):
+        x_lines = self.protein_adapter(self.protein_encoder(data["protein"]))
+        x_drugs = self.drug_adapter(self.drug_encoder(data["x"],
+                                                      data["edge_index"],
+                                                      data["edge_attr"],
+                                                      data["batch"]),
+                                    data["batch"])
+        return self.decoder(x_lines, x_drugs)
+
+class GNNCellDrugEncoderDecoder(PairsNetwork):
+    def __init__(self,
+                 line_encoder,
+                 drug_encoder,
+                 line_adapter,
+                 drug_adapter,
+                 decoder,
+                 **kwargs):
+        """
+        Network consisting of two encoders, two adapters and a decoder.
+        """
+        super().__init__()
+        self.line_encoder = line_encoder
+        self.drug_encoder = drug_encoder
+        self.line_adapter = line_adapter
+        self.drug_adapter = drug_adapter
+        self.decoder = decoder
+    def forward(self, data, *args, **kwargs):
+        x_lines = self.line_adapter(self.line_encoder(data["cell"]))
+        x_drugs = self.drug_adapter(self.drug_encoder(data["x"],
+                                                      data["edge_index"],
+                                                      data["edge_attr"],
+                                                      data["batch"]),
+                                    data["batch"])
+        return self.decoder(x_lines, x_drugs)
+
+class GNNDrugEncoderDecoder(PairsNetwork):
+    def __init__(self,
+                 drug_encoder,
+                 drug_adapter,
+                 decoder,
+                 **kwargs):
+        """
+        Network consisting of two encoders, two adapters and a decoder.
+        """
+        super().__init__()
+        self.drug_encoder = drug_encoder
+        self.drug_adapter = drug_adapter
+        self.decoder = decoder
+    def forward(self, data, *args, **kwargs):
+        x_drugs = self.drug_adapter(self.drug_encoder(data["x"],
+                                                      data["edge_index"],
+                                                      data["edge_attr"],
+                                                      data["batch"]),
+                                    data["batch"])
+        return self.decoder(x_drugs)
