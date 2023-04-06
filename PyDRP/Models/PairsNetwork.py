@@ -3,16 +3,7 @@ from torch import nn
 from torch_geometric import nn as gnn
 from torch.nn import functional as F
 from PyDRP.Models.layers import FCBlock
-
-def init_weights(m):
-    if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_uniform_(m.weight)
-        m.bias.data.fill_(0.01)
-    if isinstance(m, nn.Conv2d):
-        nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
-    elif isinstance(m, nn.BatchNorm2d):
-        nn.init.constant_(m.weight.data, 1)
-        nn.init.constant_(m.bias.data, 0)
+from PyDRP.Models.utils import init_weights
 
 class PairsNetwork(nn.Module):
     def __init__(self,

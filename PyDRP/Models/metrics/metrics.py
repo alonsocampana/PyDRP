@@ -47,7 +47,7 @@ class ElementwiseMetric(Metric):
         for l in np.unique(l_arry):
             mask = torch.Tensor(l_arry == l).bool().to(self.device)
             fs+= [self.aggr_fn(obs[mask], pred[mask])]
-        return torch.stack(fs).mean()
+        return torch.stack(fs).nanmean()
     def _drugs_compute_nagg(self):
         fs = {}
         obs = torch.cat(self.observed).squeeze()
@@ -56,7 +56,7 @@ class ElementwiseMetric(Metric):
         for d in np.unique(d_arry):
             mask = torch.Tensor(d_arry == d).bool().to(self.device)
             fs[d] = self.aggr_fn(obs[mask], pred[mask])
-        return torch.stack(fs).mean()
+        return torch.stack(fs).nanmean()
     def _lines_compute_nagg(self):
         fs = {}
         obs = torch.cat(self.observed).squeeze()
