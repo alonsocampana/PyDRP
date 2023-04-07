@@ -1,1 +1,1 @@
-from PyDRP.Data.transfer.proteins.transfer_proteins import STRINGHuman, STRINGMice, STRINGArabidopsis, STRINGPseudomonas
+from PyDRP.Data.transfer.proteins.transfer_proteins import STRINGInterface, STRINGHuman, STRINGMice, STRINGArabidopsis, STRINGPseudomonas, get_species_STRING

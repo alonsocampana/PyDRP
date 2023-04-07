@@ -9,17 +9,17 @@ import numpy as np
 
 class STRINGInterface():
     def __init__(self,
-                 data_path,
-                 sequences_path,
+                 name,
                  threshold = 700,
                  organism_id = None,
                  remove_duplicates = True,
                  filter_missing_ids = True):
         self.organism_id = organism_id
-        self.data_path = data_path
+        self.name = name
+        self.data_path = f"data/raw/string_{name}.txt.gz"
+        self.sequences_path = f"data/raw/string_{name}_seqs.csv"
         self.data_url = data_url = f"https://stringdb-static.org/download/protein.links.full.v11.5/{self.organism_id}.protein.links.full.v11.5.txt.gz"
         self.sequences_url = f"https://stringdb-static.org/download/protein.sequences.v11.5/{self.organism_id}.protein.sequences.v11.5.fa.gz"
-        self.sequences_path = sequences_path
         self.threshold = threshold
         self.remove_duplicates = remove_duplicates
         self.filter_missing_ids = filter_missing_ids
@@ -47,7 +47,7 @@ class STRINGInterface():
                 os.remove(full_path)
         if not os.path.exists(self.sequences_path):
             seqs = pd.read_csv(self.sequences_url, lineterminator=">", header = None)
-            regex = f"({self.organism_id}\.[A-Z0-9]+[0-9\.]+)\n"
+            regex = f"({self.organism_id}\.[A-Z0-9]+[0-9\._]+)\n"
             seqs = seqs[0].str.split(regex,expand = True).iloc[:, 1:]
             seqs.columns = ["PROTEIN_ID", "SEQUENCE"]
             seqs.to_csv(self.sequences_path)
@@ -71,37 +71,25 @@ class STRINGInterface():
         return f"STRING{self.organism_id}" + str(self.threshold)
 class STRINGHuman(STRINGInterface):
     def __init__(self, threshold = 700):
-        data_path = "data/raw/string_human.txt.gz"
-        sequences_path = "data/raw/string_human_seqs.csv"
         self.organism_id
-        super().__init__(data_path,
-                 sequences_path,
+        super().__init__(name = "human",
                  organism_id = 9606,
                  threshold = threshold,)
 class STRINGMice(STRINGInterface):
     def __init__(self, threshold = 700):
-        data_path = "data/raw/string_mice.txt.gz"
-        sequences_path = "data/raw/string_mice_seqs.csv"
-        super().__init__(data_path,
-                 sequences_path,
+        super().__init__(name = "mice",
                  threshold = threshold,
                  organism_id = 10090)
 class STRINGArabidopsis(STRINGInterface):
     def __init__(self, threshold = 700):
-        name = "arabidopsis"
-        data_path = f"data/raw/string_{name}.txt.gz"
-        sequences_path = f"data/raw/string_{name}_seqs.csv"
-        super().__init__(data_path,
-                         sequences_path,
+        super().__init__(name = "arabidopsis",
                          threshold = threshold,
                         organism_id = 3702,)
     
 class STRINGPseudomonas(STRINGInterface):
     def __init__(self, threshold = 700):
-        name = "pseudomonas"
-        data_path = f"data/raw/string_{name}.txt.gz"
-        sequences_path = f"data/raw/string_{name}_seqs.csv"
-        super().__init__(data_path,
-                         sequences_path,
+        super().__init__(name = "pseudomonas",
                          threshold = threshold,
                         organism_id = 208964,)
+def get_species_STRING():
+    return pd.read_csv("https://stringdb-static.org/download/species.v11.5.txt", sep = "\t")
