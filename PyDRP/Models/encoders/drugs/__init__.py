@@ -1,1 +1,1 @@
-from PyDRP.Models.encoders.encoders import GATmannEncoder, GTEncoder, GNNAttnDrugPooling
+from PyDRP.Models.encoders.encoders import GATmannEncoder, GTEncoder, GNNAttnDrugPooling, GNNMultiheadAttnDrugPooling

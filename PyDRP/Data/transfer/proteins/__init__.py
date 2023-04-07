@@ -1,0 +1,1 @@
+from PyDRP.Data.transfer.proteins.transfer_proteins import STRINGHuman, STRINGMice, STRINGArabidopsis, STRINGPseudomonas

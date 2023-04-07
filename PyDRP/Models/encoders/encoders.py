@@ -95,3 +95,34 @@ class GNNAttnDrugPooling(nn.Module):
             p.requires_grad=False
     def forward(self, x, batch):
         return self.pool(x, batch)
+
+class GNNMultiheadAttnDrugPooling(nn.Module):
+    def __init__(self,
+                 embed_dim,
+                 hidden_dim,
+                 output_embed_dim,
+                 p_dropout_attn = 0.0,
+                 p_dropout_nodes = 0.0,
+                 p_dropout_output = 0.0,
+                 n_heads = 4,
+                 **kwargs):
+        super().__init__()
+        self.n_heads = n_heads
+        self.pool = nn.ModuleList([gnn.GlobalAttention(nn.Sequential(nn.Linear(embed_dim, hidden_dim),
+                                                             nn.ReLU(),
+                                                             nn.Dropout(p_dropout_attn),
+                                                             nn.Linear(hidden_dim, 1),
+                                                             AttnDropout(p_dropout_nodes)),
+                                               nn.Sequential(nn.Linear(embed_dim, hidden_dim),
+                                                             nn.ReLU(),
+                                                             nn.Dropout(p_dropout_attn),
+                                                             nn.Linear(hidden_dim, output_embed_dim),
+                                                             nn.Dropout(p_dropout_output),)) for i in range(n_heads)])
+    def set_cold(self):
+        for p in self.parameters():
+            p.requires_grad=False
+    def forward(self, x, batch):
+        x_ = self.pool[0](x, batch)
+        for i in range(1, self.n_heads):
+            x_ = x_ + self.pool[i](x, batch)
+        return x_/self.n_heads
