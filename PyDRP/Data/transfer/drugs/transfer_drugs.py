@@ -11,6 +11,10 @@ from PyDRP.Data.features.drugs import GraphCreator
 import torch
 import rdkit
 from rdkit import rdBase
+from PyDRP.Data.utils import TorchGraphsTransferDataset
+import torch_geometric
+from torch import nn
+import torch
 
 class TransferDrugsDatasetManager():
     def __init__(self,
@@ -221,3 +225,38 @@ class MakeDrugwise(PreprocessingPipeline):
         return self.drug_smiles
     def __str__(self):
         return str(self.ppl) + "_drugwise"
+
+def get_sequential_multitask(train, test, val, drug_dict, threshold = 512, batch_size = 128):
+    output = []
+    data_matrix_train = np.vstack(train["Y"].apply(np.array).tolist())
+    data_matrix_test = np.vstack(test["Y"].apply(np.array).tolist())
+    data_matrix_val = np.vstack(val["Y"].apply(np.array).tolist())
+    nan_tasks = (~np.isnan(data_matrix_train)).sum(axis=0)
+    training_data = nan_tasks >= threshold
+    n_tasks = training_data.sum()
+    for task in range(n_tasks):
+        subtask_df_train = train.assign(Y = data_matrix_train[:, training_data][:, task]).dropna()
+        subtask_df_test = test.assign(Y = data_matrix_test[:, training_data][:, task]).dropna()
+        subtask_df_val = val.assign(Y = data_matrix_val[:, training_data][:, task]).dropna()
+        task_ds_train = TorchGraphsTransferDataset(subtask_df_train, drug_dict)
+        task_ds_test = TorchGraphsTransferDataset(subtask_df_test, drug_dict)
+        task_ds_val = TorchGraphsTransferDataset(subtask_df_val, drug_dict)
+        task_dataloader_train = torch.utils.data.DataLoader(task_ds_train, batch_size = batch_size,
+                                                   collate_fn = torch_geometric.data.Batch.from_data_list,
+                                                            shuffle=True, drop_last = True)
+        task_dataloader_test = torch.utils.data.DataLoader(task_ds_test, batch_size = batch_size,
+                                                   collate_fn = torch_geometric.data.Batch.from_data_list)
+        task_dataloader_val = torch.utils.data.DataLoader(task_ds_val, batch_size = batch_size,
+                                                   collate_fn = torch_geometric.data.Batch.from_data_list)
+        is_binary = len(subtask_df_train ["Y"].unique()) < 3
+        
+        if is_binary:
+            w = torch.Tensor([subtask_df_train["Y"].shape[0]/(2 *(subtask_df_train ["Y"] == 1).sum())])
+            loss = nn.BCEWithLogitsLoss(pos_weight = w)
+        else:
+            loss = nn.MSELoss()
+        output += [{"train": task_dataloader_train,
+                   "test": task_dataloader_test,
+                   "val": task_dataloader_val,
+                   "loss": loss}]
+    return output

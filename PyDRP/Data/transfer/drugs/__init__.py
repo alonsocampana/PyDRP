@@ -1,1 +1,1 @@
-from PyDRP.Data.transfer.drugs.transfer_drugs import TransferDrugsDatasetManager, ToxRicPreprocessingPipeline, TDCSingleInstanceWrapper, MultiTaskPreprocessingPipeline, MakeDrugwise
+from PyDRP.Data.transfer.drugs.transfer_drugs import TransferDrugsDatasetManager, ToxRicPreprocessingPipeline, TDCSingleInstanceWrapper, MultiTaskPreprocessingPipeline, MakeDrugwise, get_sequential_multitask

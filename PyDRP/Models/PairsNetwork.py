@@ -182,10 +182,29 @@ class GNNDrugEncoderDecoder(PairsNetwork):
         self.drug_encoder = drug_encoder
         self.drug_adapter = drug_adapter
         self.decoder = decoder
+        self.multitask = False
+    def make_multitask(self, n_tasks, module, module_kwargs, share_init_w = True):
+        self.decoder = nn.ModuleList([])
+        for n in range(n_tasks):
+            new_head = module(**module_kwargs)
+            self.decoder += [new_head]
+        if share_init_w:
+            for n in range(n_tasks):
+                if n == 0:
+                    state_dict = self.decoder[n].state_dict()
+                else:
+                    self.decoder[n].load_state_dict(state_dict)
+        self.multitask = True
+        self.current_task = None
+    def set_task(self, n_task):
+        self.current_task = n_task
     def forward(self, data, *args, **kwargs):
         x_drugs = self.drug_adapter(self.drug_encoder(data["x"],
                                                       data["edge_index"],
                                                       data["edge_attr"],
                                                       data["batch"]),
                                     data["batch"])
-        return self.decoder(x_drugs)
+        if self.multitask:
+            return self.decoder[self.current_task](x_drugs)
+        else:
+            return self.decoder(x_drugs)
