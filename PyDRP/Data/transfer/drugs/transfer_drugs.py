@@ -15,6 +15,7 @@ from PyDRP.Data.utils import TorchGraphsTransferDataset
 import torch_geometric
 from torch import nn
 import torch
+import urllib
 
 class TransferDrugsDatasetManager():
     def __init__(self,

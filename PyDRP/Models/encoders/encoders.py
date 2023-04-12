@@ -59,15 +59,15 @@ class GATmannEncoder(DrugEncoder):
         return x
 
 class GTEncoder(DrugEncoder):
-    def __init__(self, embed_dim, num_heads=1):
+    def __init__(self, embed_dim, num_heads=1, n_layers=1):
         super().__init__()
-        self.init_gat = gnn.GATConv(79, embed_dim, edge_dim = 10)
+        self.init_gat = gnn.GATv2Conv(79, embed_dim, edge_dim = 10)
         self.layers = _stack = GatedGNNRes(TransGAT,
                                            {"input_dim":embed_dim,
                                              "output_dim":embed_dim,
                                              "edge_dim":10,
-                                             "num_heads":1,},
-                                           n_layers = 2)
+                                             "num_heads":num_heads,},
+                                           n_layers = n_layers)
     def forward(self, x, edge_index, edge_attr, batch):
         x = self.init_gat(x, edge_index, edge_attr)
         return self.layers(x, edge_index, edge_attr, batch)
