@@ -30,7 +30,7 @@ class PreprocessingPipeline():
         if os.path.exists(self.root + "data/processed/CCLE_expression.csv"):
             self.cell_lines = pd.read_csv(self.root + "data/processed/CCLE_expression.csv", index_col=0)
         else:
-            self.cell_lines = pd.read_csv(self.root + "https://ndownloader.figshare.com/files/26261476", index_col=0)
+            self.cell_lines = pd.read_csv("https://ndownloader.figshare.com/files/26261476", index_col=0)
             self.cell_lines.to_csv("data/processed/CCLE_expression.csv")
         self.cell_lines.columns = self.cell_lines.columns.str.extract("(^[a-zA-Z0-9-\.]+) \(").to_numpy().squeeze()
 
