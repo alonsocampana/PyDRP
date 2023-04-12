@@ -260,3 +260,53 @@ def get_sequential_multitask(train, test, val, drug_dict, threshold = 512, batch
                    "val": task_dataloader_val,
                    "loss": loss}]
     return output
+
+class MolDataPreprocessingPipeline():
+    def __init__(self, root = "./",
+                 threshold = 2000,
+                 threshold_imbalance = 0.05,
+                 filter_terms = None,
+                 filter_missing_ids = True):
+        """
+        
+        """
+        if not os.path.exists(root + "data"):
+            os.mkdir(root + "data")
+        if not os.path.exists(root + "data/raw"):
+            os.mkdir(root + "data/raw")
+        if not os.path.exists(root + "data/processed"):
+            os.mkdir(root + "data/processed")
+        self.threshold = threshold
+        self.threshold_imbalance = threshold_imbalance
+        self.filter_terms = filter_terms
+        self.filter_missing_ids = filter_missing_ids
+        if not os.path.exists(root + "data/raw/moldata.zip"):
+            urllib.request.urlretrieve("https://github.com/LumosBio/MolData/raw/main/Data/all_molecular_data.zip", "data/raw/moldata.zip")
+        moldata = pd.read_csv(root + "data/raw/moldata.zip")
+        self.drug_smiles = moldata.loc[:, ["smiles", "PUBCHEM_CID"]].drop_duplicates()
+        self.drug_smiles.columns = ["SMILES", "DRUG_ID"]
+        self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
+        self.data = moldata.set_index("PUBCHEM_CID").iloc[:, 1:]
+        aid_disease_mapping = pd.read_csv("https://raw.githubusercontent.com/LumosBio/MolData/main/Data/aid_disease_mapping.csv").set_index("AID")
+        self.terms = aid_disease_mapping.columns.to_numpy()
+        self.aid_mapping = aid_disease_mapping
+        if filter_terms is not None:
+            self.columns_term = aid_disease_mapping.query(f"{filter_terms} == 1").index.to_numpy()
+        else:
+            self.columns_term = None
+    def preprocess(self):
+        moldata_data = self.data
+        if self.columns_term is not None:
+            moldata_data = moldata_data.loc[:, self.columns_term]
+        num_nonna = (~(moldata_data.isna())).sum(axis=0)
+        num_neg = (moldata_data == 0).sum(axis=0)
+        passed_filters = ((num_neg/num_nonna) > self.threshold_imbalance) & ((num_neg/num_nonna) < (1-self.threshold_imbalance)) & (num_nonna > self.threshold)
+        self.data_subset = self.data[~self.data.loc[:, passed_filters].isna().all(axis=1)].loc[:, passed_filters]
+        self.data_subset = self.data_subset.assign(Y = self.data_subset.to_numpy().tolist()).loc[:, "Y"].reset_index()
+        self.data_subset.columns = ["DRUG_ID", "Y"]
+        return self.data_subset
+    def get_drugs(self):
+        data_drugs = self.data_subset.loc[:, "DRUG_ID"]
+        return self.drug_smiles.loc[data_drugs]
+    def __str__(self):
+        return f"MolData_{str(self.threshold)}_{str(self.threshold_imbalance)}_{str(self.filter_terms)}"
