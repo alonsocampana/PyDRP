@@ -311,3 +311,35 @@ class MolDataPreprocessingPipeline():
         return self.drug_smiles.loc[data_drugs]
     def __str__(self):
         return f"MolData_{str(self.threshold)}_{str(self.threshold_imbalance)}_{str(self.filter_terms)}"
+    
+class QmugsPreprocessingPipeline():
+    def __init__(self, root = "./"):
+        """
+        Preprocess the qmugs data giving the computed features.
+        """
+        if not os.path.exists(root + "data"):
+            os.mkdir(root + "data")
+        if not os.path.exists(root + "data/raw"):
+            os.mkdir(root + "data/raw")
+        if not os.path.exists(root + "data/processed"):
+            os.mkdir(root + "data/processed")
+        self.data_url = "https://libdrive.ethz.ch/index.php/s/X5vOBNSITAG5vzM/download?path=%2F&files=summary.csv"
+        self.data_path = "data/raw/qmugs_raw.csv"
+        if not os.path.exists(root + self.data_path):
+            urllib.request.urlretrieve(self.data_url, self.data_path)
+        self.drug_smiles = pl.scan_csv(data_path).select([pl.col("chembl_id"), pl.col("smiles")]).collect().to_pandas().drop_duplicates()
+        self.drug_smiles.columns = ["DRUG_ID", "SMILES"]
+        self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
+        self.data = pl.read_csv(data_path).to_pandas().groupby("chembl_id").mean().iloc[:, 3:]
+    def preprocess(self):
+        data = self.data.copy()
+        data = data.loc[:, data.dtypes != bool]
+        data = data.assign(Y = data.to_numpy().tolist()).loc[:, "Y"]
+        data = data.reset_index()
+        data.columns = ["DRUG_ID", "Y"]
+        self.data_subset = data
+    def get_drugs(self):
+        data_drugs = self.data_subset.loc[:, "DRUG_ID"]
+        return self.drug_smiles.loc[data_drugs]
+    def __str__(self):
+        return f"Qmugs"
