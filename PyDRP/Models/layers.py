@@ -11,13 +11,22 @@ class FCBlock(nn.Module):
                  hidden_dim,
                  output_dim = 1,
                  p_dropout = 0.0,
+                 use_batchnorm = False,
                  **kwargs):
         super().__init__()
-        self.nw = nn.Sequential(nn.ReLU(),
-                               nn.Dropout(p=p_dropout),
-                               nn.Linear(input_dim, hidden_dim),
-                               nn.Sigmoid(),
-                               nn.Linear(hidden_dim, output_dim))
+        if use_batchnorm:
+            self.nw = nn.Sequential(nn.ReLU(),
+                                   nn.BatchNorm1d(input_dim),
+                                   nn.Dropout(p=p_dropout),
+                                   nn.Linear(input_dim, hidden_dim),
+                                   nn.Sigmoid(),
+                                   nn.Linear(hidden_dim, output_dim))
+        else:
+            self.nw = nn.Sequential(nn.ReLU(),
+                                   nn.Dropout(p=p_dropout),
+                                   nn.Linear(input_dim, hidden_dim),
+                                   nn.Sigmoid(),
+                                   nn.Linear(hidden_dim, output_dim))
     def forward(self, x):
         return self.nw(x)
 
