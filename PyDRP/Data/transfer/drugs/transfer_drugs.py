@@ -16,6 +16,7 @@ import torch_geometric
 from torch import nn
 import torch
 import urllib
+import polars as pl
 
 class TransferDrugsDatasetManager():
     def __init__(self,
