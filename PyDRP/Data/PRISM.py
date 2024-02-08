@@ -5,7 +5,7 @@ import numpy as np
 
 class PRISMPreprocessingPipeline(PreprocessingPipeline):
     def __init__(self, root = "./",
-                 target = "ic_50",
+                 target = "ec50",
                  cell_lines = "expression",
                  gene_subset = None,
                 filter_missing_ids = True):
@@ -27,7 +27,7 @@ class PRISMPreprocessingPipeline(PreprocessingPipeline):
         self.filter_missing_ids = filter_missing_ids
         self.dataset = "PRISM"
         if not os.path.exists(root + "data/raw/prism.csv"):
-            self.data = pd.read_excel("https://ndownloader.figshare.com/files/20237739")
+            self.data = pd.read_csv("https://ndownloader.figshare.com/files/20237739")
             self.data.to_csv(root + "data/raw/prism.csv")
         else:
             self.data = pd.read_csv(root + "data/raw/prism.csv", index_col = 0)
@@ -39,6 +39,7 @@ class PRISMPreprocessingPipeline(PreprocessingPipeline):
                 self.cell_lines.to_csv("data/processed/CCLE_expression.csv")
             self.cell_lines.columns = self.cell_lines.columns.str.extract("(^[a-zA-Z0-9-\.]+) \(")
         self.drug_smiles = self.data.loc[:, ["name", "smiles"]].drop_duplicates()
+        self.drug_smiles.loc[:, "smiles"] = self.drug_smiles.loc[:, "smiles"].str.split(",").apply(lambda x: x[0]).drop_duplicates()
         self.drug_smiles.columns = ["DRUG_ID", "SMILES"]
         self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
     def preprocess(self):
