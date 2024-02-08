@@ -1,7 +1,7 @@
 from PyDRP.Data import DatasetManager, GDSC, PRISM, CTRPv2
 from PyDRP.Data.features.drugs import GraphCreator
 from PyDRP.Data.features.cells import TensorLineFeaturizer
-from PyDRP.Data.features.targets import MinMaxScaling, IdentityPipeline, LogScaling
+from PyDRP.Data.features.targets import MinMaxScaling, IdentityPipeline
 import pandas as pd
 from pprint import pprint
 import os

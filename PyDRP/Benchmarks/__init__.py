@@ -1,1 +1,1 @@
-from from PyDRP.Benchmarks.BenchCanc import BenchCanc
+from PyDRP.Benchmarks.BenchCanc import BenchCanc
