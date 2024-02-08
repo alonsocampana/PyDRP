@@ -5,9 +5,10 @@ import numpy as np
 
 class PRISMPreprocessingPipeline(PreprocessingPipeline):
     def __init__(self, root = "./",
-                 target = "ec50",
+                 target = "ic_50",
                  cell_lines = "expression",
                  gene_subset = None,
+                 clip_val = None,
                 filter_missing_ids = True):
         """
         Downloads and preprocesses the data.
@@ -21,6 +22,7 @@ class PRISMPreprocessingPipeline(PreprocessingPipeline):
             os.mkdir(root + "data/raw")
         if not os.path.exists(root + "data/processed"):
             os.mkdir(root + "data/processed")
+        self.clip_val  = clip_val
         self.target = target
         self.root = root
         self.gene_subset = gene_subset
@@ -43,7 +45,10 @@ class PRISMPreprocessingPipeline(PreprocessingPipeline):
         self.drug_smiles.columns = ["DRUG_ID", "SMILES"]
         self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
     def preprocess(self):
-        self.data_subset = self.data.loc[:, ["depmap_id", "name", self.target]].groupby(["depmap_id", "name"]).mean().reset_index()
+        if self.clip_val is not None:
+            self.data.loc[:, self.target] = self.data.loc[:, self.target].replace(float("inf"), self.clip_val)
+            self.data.loc[:, self.target][self.data.loc[:, self.target] > 10] = self.clip_val
+        self.data_subset = self.data.loc[:, ["depmap_id", "name", self.target]].dropna().groupby(["depmap_id", "name"]).mean().reset_index()
         self.data_subset.columns = ["CELL_ID", "DRUG_ID", "Y"]
         if self.filter_missing_ids:
             self.lines = self.cell_lines.index.to_numpy()

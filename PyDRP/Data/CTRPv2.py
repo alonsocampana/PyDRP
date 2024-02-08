@@ -11,6 +11,7 @@ class CTRPv2PreprocessingPipeline(PreprocessingPipeline):
                  target = "ec_50",
                  cell_lines = "expression",
                  gene_subset = None,
+                 clip_val = None,
                 filter_missing_ids = True):
         """
         Downloads and preprocesses the data.
@@ -25,6 +26,7 @@ class CTRPv2PreprocessingPipeline(PreprocessingPipeline):
         if not os.path.exists(root + "data/processed"):
             os.mkdir(root + "data/processed")
         self.target = target
+        self.clip_val  = clip_val
         self.root = root
         if target == "ec50":
             self.trgt_col = "apparent_ec50_umol"
@@ -50,7 +52,10 @@ class CTRPv2PreprocessingPipeline(PreprocessingPipeline):
         self.drug_smiles.columns = ["DRUG_ID", "SMILES"]
         self.drug_smiles = self.drug_smiles.set_index("DRUG_ID")
     def preprocess(self):
-        self.data_subset = self.data.loc[:, ["experiment_id", "master_cpd_id", self.trgt_col]]
+        if self.clip_val is not None:
+            self.data.loc[:, self.trgt_col] = self.data.loc[:, self.trgt_col].replace(float("inf"), self.clip_val)
+            self.data.loc[:, self.trgt_col][self.data.loc[:, self.trgt_col] > 10] = self.clip_val
+        self.data_subset = self.data.loc[:, ["experiment_id", "master_cpd_id", self.trgt_col]].dropna()
         df3 = pd.read_csv(self.z.open("v20.meta.per_cell_line.txt"), sep = "\t")
         synonyms = pd.read_csv("https://ndownloader.figshare.com/files/26261569")
         synonym_table = synonyms.merge(df3, right_on="ccl_name", left_on="stripped_cell_line_name").loc[:, ["DepMap_ID", "master_ccl_id"]].drop_duplicates()
