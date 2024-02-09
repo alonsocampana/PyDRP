@@ -149,22 +149,22 @@ class CancerDataset():
         drug_data["cell"] = cell_data.unsqueeze(0)
         return drug_data
 
-class BenchMark():
+class BenchCanc():
     def __init__(self,
-                 model_cls,
                  config,
                  fold,
                  merge_train_eval = True,
                  setting = "precision_oncology",
                  dataset = "GDSC2",
+                 line_features = "expression",
                  epoch_callback=None,
                  final_callback=None,):
+        self.line_features = line_features
         self.seed = 3558
         torch.manual_seed(self.seed)
         np.random.seed(self.seed)
         self.dataset = dataset
         self.setting = setting
-        self.model_cls = model_cls
         self.max_patience = 10
         self.n_folds = 10
         self.fold = fold
@@ -187,7 +187,7 @@ class BenchMark():
         if self.dataset == "GDSC1":
             manager = DatasetManager(processing_pipeline = GDSC(target = "LN_IC50",
                                                                 gene_subset = paccmann_genes,
-                                                                cell_lines = "expression"),
+                                                                cell_lines = self.line_features),
                                     target_processor = IdentityPipeline(),
                                     partition_column = "DRUG_ID",
                                     k = self.n_folds,
@@ -197,7 +197,7 @@ class BenchMark():
             manager = DatasetManager(processing_pipeline = GDSC(target = "LN_IC50",
                                                                 dataset = "GDSC2",
                                                                 gene_subset = paccmann_genes,
-                                                                cell_lines = "expression"),
+                                                                cell_lines = self.line_features),
                                     target_processor = IdentityPipeline(),
                                     partition_column = "DRUG_ID",
                                     k = self.n_folds,
@@ -207,7 +207,7 @@ class BenchMark():
             manager = DatasetManager(processing_pipeline = CTRPv2(target = "ec50",
                                                     gene_subset = paccmann_genes,
                                                     clip_val = 10,
-                                                    cell_lines = "expression"),
+                                                    cell_lines = self.line_features),
                         target_processor = IdentityPipeline(),
                         partition_column = "DRUG_ID",
                         k = self.n_folds,
@@ -217,14 +217,14 @@ class BenchMark():
             manager = DatasetManager(processing_pipeline = PRISM(target = "ec50",
                                                     gene_subset = paccmann_genes,
                                                     clip_val = 10,
-                                                    cell_lines = "expression"),
+                                                    cell_lines = self.line_features),
                         target_processor = IdentityPipeline(),
                         partition_column = "DRUG_ID",
                         k = 10,
                         drug_featurizer = GraphCreator(),
                         line_featurizer = TensorLineFeaturizer())
         return manager
-    def _instantiate(self, fold):
+    def _instantiate(self, model, fold):
         self.patience = self.max_patience + 0
         self.best_train_loss = 1000
         manager = self._get_manager()
@@ -239,19 +239,18 @@ class BenchMark():
             val_dataloader = self._create_dataloader(val, drug_dict, line_dict, shuffle=False)
         train_dataloader = self._create_dataloader(train, drug_dict, line_dict, shuffle=True)
         test_dataloader = self._create_dataloader(test, drug_dict, line_dict, shuffle=False)
-        model = self.model_cls(**self.config["model"])
         self.device = torch.device(self.config["env"]["device"])
-        model.to(self.device)
         optimizer = torch.optim.Adam(model.parameters(), self.config["optimizer"]["learning_rate"])
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                                patience=self.config["optimizer"]["patience"],
                                                                factor=0.1)
         loss = nn.MSELoss()
+        model.to(self.device)
         scaler = torch.cuda.amp.GradScaler()
-        return model, optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader
-    def train_model(self):
+        return optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader
+    def train_model(self, model):
         scaler = torch.cuda.amp.GradScaler()
-        model, optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader = self._instantiate(self.fold)
+        optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader = self._instantiate(model, self.fold)
         train_metrics = self._get_train_metrics().to(self.device)
         self.train_metrics = train_metrics
         test_metrics = self._get_eval_metrics().to(self.device)
