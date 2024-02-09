@@ -51,36 +51,39 @@ class GroupwiseMetric(Metric):
         return self.get_residual(X, y)
 
     def compute(self) -> Tensor:
-        if self.grouping == "cell_lines":
-            grouping = self.cell_lines
-        elif self.grouping == "drugs":
-            grouping = self.drugs
-        metric = self.metric
-        if not self.residualize:
-            y_obs = self.target
-            y_pred = self.pred
-        else:
-            y_obs = self.get_residual_ind(self.target, self.drugs, self.cell_lines)
-            y_pred = self.get_residual_ind(self.pred, self.drugs, self.cell_lines)
-        average = self.average
-        nan_ignore = self.nan_ignore
-        unique = grouping.unique()
-        proportions = []
-        metrics = []
-        for g in unique:
-            is_group = grouping == g
-            metrics += [metric(y_obs[grouping == g], y_pred[grouping == g])]
-            proportions += [is_group.sum()/len(is_group)]
-        if average is None:
-            return torch.stack(metrics)
-        if (average == "macro") & (nan_ignore):
-            return torch.nanmean(torch.Tensor([metrics]))
-        if (average == "macro") & (not nan_ignore):
-            return torch.mean(torch.Tensor([metrics]))
-        if (average == "micro") & (not nan_ignore):
-            return (torch.Tensor([proportions])*torch.Tensor([metrics])).sum()
-        else:
-            raise NotImplementedError
+        try:
+            if self.grouping == "cell_lines":
+                grouping = self.cell_lines
+            elif self.grouping == "drugs":
+                grouping = self.drugs
+            metric = self.metric
+            if not self.residualize:
+                y_obs = self.target
+                y_pred = self.pred
+            else:
+                y_obs = self.get_residual_ind(self.target, self.drugs, self.cell_lines)
+                y_pred = self.get_residual_ind(self.pred, self.drugs, self.cell_lines)
+            average = self.average
+            nan_ignore = self.nan_ignore
+            unique = grouping.unique()
+            proportions = []
+            metrics = []
+            for g in unique:
+                is_group = grouping == g
+                metrics += [metric(y_obs[grouping == g], y_pred[grouping == g])]
+                proportions += [is_group.sum()/len(is_group)]
+            if average is None:
+                return torch.stack(metrics)
+            if (average == "macro") & (nan_ignore):
+                return torch.nanmean(torch.Tensor([metrics]))
+            if (average == "macro") & (not nan_ignore):
+                return torch.mean(torch.Tensor([metrics]))
+            if (average == "micro") & (not nan_ignore):
+                return (torch.Tensor([proportions])*torch.Tensor([metrics])).sum()
+            else:
+                raise NotImplementedError
+        except RuntimeError:
+            return torch.Tensor([float('nan')])
     
     def update(self, preds: Tensor, target: Tensor,  drugs: Tensor,  cell_lines: Tensor) -> None:
         self.target = torch.cat([self.target, target])
@@ -157,9 +160,11 @@ class BenchCanc():
                  setting = "precision_oncology",
                  dataset = "GDSC2",
                  line_features = "expression",
+                 minmax_target  = False,
                  epoch_callback=None,
                  final_callback=None,):
         self.line_features = line_features
+        self.minmax_target = minmax_target
         self.seed = 3558
         torch.manual_seed(self.seed)
         np.random.seed(self.seed)
@@ -184,11 +189,15 @@ class BenchCanc():
             partition_column = "CELL_ID"
         else:
             partition_column = "DRUG_ID"
+        if self.minmax_target:
+            target_transform = MinMaxScaling((0, 1))
+        else:
+            target_transform = IdentityPipeline()
         if self.dataset == "GDSC1":
             manager = DatasetManager(processing_pipeline = GDSC(target = "LN_IC50",
                                                                 gene_subset = paccmann_genes,
                                                                 cell_lines = self.line_features),
-                                    target_processor = IdentityPipeline(),
+                                    target_processor = target_transform,
                                     partition_column = "DRUG_ID",
                                     k = self.n_folds,
                                     drug_featurizer = GraphCreator(),
@@ -198,7 +207,7 @@ class BenchCanc():
                                                                 dataset = "GDSC2",
                                                                 gene_subset = paccmann_genes,
                                                                 cell_lines = self.line_features),
-                                    target_processor = IdentityPipeline(),
+                                    target_processor = target_transform,
                                     partition_column = "DRUG_ID",
                                     k = self.n_folds,
                                     drug_featurizer = GraphCreator(),
@@ -208,7 +217,7 @@ class BenchCanc():
                                                     gene_subset = paccmann_genes,
                                                     clip_val = 10,
                                                     cell_lines = self.line_features),
-                        target_processor = IdentityPipeline(),
+                        target_processor = target_transform,
                         partition_column = "DRUG_ID",
                         k = self.n_folds,
                         drug_featurizer = GraphCreator(),
@@ -218,7 +227,7 @@ class BenchCanc():
                                                     gene_subset = paccmann_genes,
                                                     clip_val = 10,
                                                     cell_lines = self.line_features),
-                        target_processor = IdentityPipeline(),
+                        target_processor = target_transform,
                         partition_column = "DRUG_ID",
                         k = 10,
                         drug_featurizer = GraphCreator(),
@@ -240,12 +249,12 @@ class BenchCanc():
         train_dataloader = self._create_dataloader(train, drug_dict, line_dict, shuffle=True)
         test_dataloader = self._create_dataloader(test, drug_dict, line_dict, shuffle=False)
         self.device = torch.device(self.config["env"]["device"])
-        optimizer = torch.optim.Adam(model.parameters(), self.config["optimizer"]["learning_rate"])
+        model.to(self.device)
+        optimizer = torch.optim.Adam(model.parameters(), self.config["optimizer"]["learning_rate"], **self.config["optimizer"]["kwargs"])
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                                patience=self.config["optimizer"]["patience"],
                                                                factor=0.1)
         loss = nn.MSELoss()
-        model.to(self.device)
         scaler = torch.cuda.amp.GradScaler()
         return optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader
     def train_model(self, model):
@@ -256,12 +265,12 @@ class BenchCanc():
         test_metrics = self._get_eval_metrics().to(self.device)
         self.test_metrics = test_metrics
         for epoch in range(self.config["optimizer"]["max_epochs"]):
-            train_metrics.reset()
-            test_metrics.reset()
+            train_metrics.increment()
+            test_metrics.increment()
             self.train_step(model, scaler, optimizer, loss, train_metrics, train_dataloader)
             self.eval_step(model, scaler, test_metrics, test_dataloader)
             self.epoch_callback(epoch, model, train_metrics, test_metrics)
-            if self.early_stop(train_metrics["MeanSquaredError"]):
+            if self.early_stop(train_metrics.compute()["MeanSquaredError"]):
                 break
         return self.final_callback(model, train_metrics, test_metrics)
     def train_step(self,
@@ -277,7 +286,7 @@ class BenchCanc():
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(dtype=torch.float16, enabled=self.config["env"]["mixed_precision"]):
                 y_pred = model(batch)
-                l = loss(y_pred, batch["y"])
+                l = loss(y_pred.squeeze(), batch["y"].squeeze())
             scaler.scale(l).backward()
             if self.config["optimizer"]["clip_norm"]:
                 scaler.unscale_(optimizer)
@@ -318,10 +327,10 @@ class BenchCanc():
         else:
             return False
     def default_final_callback(self, model, train_metrics, test_metrics):
-        return test_metrics.compute()
+        return model, train_metrics, test_metrics
     def _get_train_metrics(self):
         if self.setting == "drug_discovery":
-            return torchmetrics.MetricCollection({"R_drugwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
+            return torchmetrics.MetricTracker(torchmetrics.MetricCollection({"R_drugwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
                               grouping="drugs",
                               average="macro",
                               residualize=True),
@@ -329,9 +338,9 @@ class BenchCanc():
                                           grouping="drugs",
                                           average="macro",
                                           residualize=False),
-                    "MeanSquaredError":torchmetrics.MeanSquaredError()})
+                    "MeanSquaredError":torchmetrics.MeanSquaredError()}))
         elif self.setting == "precision_oncology":
-            return torchmetrics.MetricCollection({"R_cellwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
+            return torchmetrics.MetricTracker(torchmetrics.MetricCollection({"R_cellwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
                               grouping="cell_lines",
                               average="macro",
                               residualize=True),
@@ -339,10 +348,10 @@ class BenchCanc():
                                           grouping="cell_lines",
                                           average="macro",
                                           residualize=True),
-                    "MeanSquaredError":torchmetrics.MeanSquaredError()})
+                    "MeanSquaredError":torchmetrics.MeanSquaredError()}))
     def _get_eval_metrics(self):
         if self.setting == "drug_discovery":
-            return torchmetrics.MetricCollection({"R_drugwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
+            return torchmetrics.MetricTracker(torchmetrics.MetricCollection({"R_drugwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
                               grouping="drugs",
                               average="macro",
                               residualize=True),
@@ -350,9 +359,9 @@ class BenchCanc():
                                           grouping="drugs",
                                           average="macro",
                                           residualize=False),
-                    "MeanSquaredError":torchmetrics.MeanSquaredError()})
+                    "MeanSquaredError":torchmetrics.MeanSquaredError()}))
         elif self.setting == "precision_oncology":
-            return torchmetrics.MetricCollection({"R_cellwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
+            return torchmetrics.MetricTracker(torchmetrics.MetricCollection({"R_cellwise_residuals":GroupwiseMetric(metric=torchmetrics.functional.pearson_corrcoef,
                               grouping="cell_lines",
                               average="macro",
                               residualize=True),
@@ -360,7 +369,7 @@ class BenchCanc():
                                           grouping="cell_lines",
                                           average="macro",
                                           residualize=False),
-                    "MeanSquaredError":torchmetrics.MeanSquaredError()})
+                    "MeanSquaredError":torchmetrics.MeanSquaredError()}))
     def _get_drug_representation(self, manager):
         return manager.get_drugs()
     def _get_cell_representation(self, manager):
