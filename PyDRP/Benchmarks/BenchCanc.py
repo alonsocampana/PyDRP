@@ -155,7 +155,6 @@ class CancerDataset():
 class BenchCanc():
     def __init__(self,
                  config,
-                 fold,
                  merge_train_eval = True,
                  setting = "precision_oncology",
                  dataset = "GDSC2",
@@ -172,7 +171,6 @@ class BenchCanc():
         self.setting = setting
         self.max_patience = 10
         self.n_folds = 10
-        self.fold = fold
         self.config = config
         self.merge_train_eval = merge_train_eval
         if epoch_callback is None:
@@ -195,10 +193,11 @@ class BenchCanc():
             target_transform = IdentityPipeline()
         if self.dataset == "GDSC1":
             manager = DatasetManager(processing_pipeline = GDSC(target = "LN_IC50",
+                                                                dataset = "GDSC1",
                                                                 gene_subset = paccmann_genes,
                                                                 cell_lines = self.line_features),
                                     target_processor = target_transform,
-                                    partition_column = "DRUG_ID",
+                                    partition_column = partition_column,
                                     k = self.n_folds,
                                     drug_featurizer = GraphCreator(),
                                     line_featurizer = TensorLineFeaturizer())
@@ -208,7 +207,7 @@ class BenchCanc():
                                                                 gene_subset = paccmann_genes,
                                                                 cell_lines = self.line_features),
                                     target_processor = target_transform,
-                                    partition_column = "DRUG_ID",
+                                    partition_column = partition_column,
                                     k = self.n_folds,
                                     drug_featurizer = GraphCreator(),
                                     line_featurizer = TensorLineFeaturizer())
@@ -218,7 +217,7 @@ class BenchCanc():
                                                     clip_val = 10,
                                                     cell_lines = self.line_features),
                         target_processor = target_transform,
-                        partition_column = "DRUG_ID",
+                        partition_column = partition_column,
                         k = self.n_folds,
                         drug_featurizer = GraphCreator(),
                         line_featurizer = TensorLineFeaturizer())
@@ -228,7 +227,7 @@ class BenchCanc():
                                                     clip_val = 10,
                                                     cell_lines = self.line_features),
                         target_processor = target_transform,
-                        partition_column = "DRUG_ID",
+                        partition_column = partition_column,
                         k = 10,
                         drug_featurizer = GraphCreator(),
                         line_featurizer = TensorLineFeaturizer())
@@ -240,7 +239,7 @@ class BenchCanc():
         self.manager = manager
         drug_dict = self._get_drug_representation(manager)
         line_dict = self._get_cell_representation(manager)
-        train, val, test = self._get_fold(manager, self.fold)
+        train, val, test = self._get_fold(manager, fold)
         if self.merge_train_eval:
             train = pd.concat([train, val], 0)
             val_dataloader = None
@@ -257,9 +256,9 @@ class BenchCanc():
         loss = nn.MSELoss()
         scaler = torch.cuda.amp.GradScaler()
         return optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader
-    def train_model(self, model):
+    def train_model(self, model, fold):
         scaler = torch.cuda.amp.GradScaler()
-        optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader = self._instantiate(model, self.fold)
+        optimizer, scheduler, scaler, loss, train_dataloader, val_dataloader, test_dataloader = self._instantiate(model, fold)
         train_metrics = self._get_train_metrics().to(self.device)
         self.train_metrics = train_metrics
         test_metrics = self._get_eval_metrics().to(self.device)
@@ -269,10 +268,10 @@ class BenchCanc():
             test_metrics.increment()
             self.train_step(model, scaler, optimizer, loss, train_metrics, train_dataloader)
             self.eval_step(model, scaler, test_metrics, test_dataloader)
-            self.epoch_callback(epoch, model, train_metrics, test_metrics)
+            self.epoch_callback(epoch, model, optimizer, scheduler, train_metrics, test_metrics, self.config)
             if self.early_stop(train_metrics.compute()["MeanSquaredError"]):
                 break
-        return self.final_callback(model, train_metrics, test_metrics)
+        return self.final_callback(model, optimizer, scheduler, train_metrics, test_metrics)
     def train_step(self,
                    model,
                    scaler,
@@ -312,7 +311,7 @@ class BenchCanc():
                                batch["y"].squeeze().to(self.device),
                                drugs = batch["drug_id"].squeeze().to(self.device),
                                cell_lines = batch["cell_id"].squeeze().to(self.device))
-    def default_epoch_callback(self, epoch, model, train_metrics, test_metrics):
+    def default_epoch_callback(self, epoch, model, optimizer, scheduler, train_metrics, test_metrics, config):
         test_metrics = {it[0]:it[1].item() for it in test_metrics.compute().items()}
         print(f"epoch : {epoch}, test_metrics: {test_metrics}")
     def early_stop(self, last_train_loss):
@@ -326,7 +325,7 @@ class BenchCanc():
             return True
         else:
             return False
-    def default_final_callback(self, model, train_metrics, test_metrics):
+    def default_final_callback(self, model, optimizer, scheduler, train_metrics, test_metrics):
         return model, train_metrics, test_metrics
     def _get_train_metrics(self):
         if self.setting == "drug_discovery":
